@@ -3,12 +3,15 @@ Created on 08.02.2013
 
 @author: estani
 '''
+from __future__ import print_function
+import string
+basestring = str
 
 class Item(object):
     def __init__(self, value, previous=None):
         self.value = value
         self.next = None
-        
+
         if previous:
             self.previous = previous
             previous.next = self
@@ -28,17 +31,17 @@ class BufferedGenerator(object):
         count = self.size
         for i in self._gen:
             current = Item(i, previous=previous)
-            
+
             if count == 0:
                 end = end.next
-                end.previous.detach()                
+                end.previous.detach()
             else:
                 if count == self.size:
                     end = current
                 count -= 1
             yield current
             previous=current
-                
+
 from struct import unpack, pack
 from datetime import datetime, timedelta
 from inspect import currentframe, getargvalues
@@ -47,7 +50,7 @@ import os
 
 from ttyrec.utils import to_datetime, to_timestamp, to_timestamp_tuple, to_timedelta
 
-_HEADER = '<lli'    
+_HEADER = '<lli'
 """Each entry of ttyrec is preceded by a 12byte header::
 
     time_sv (long int sec, long int usec)
@@ -81,7 +84,7 @@ class Options(dict):
         return Options(parsed_dict)
     def add(self, str_val):
         self.update(Options.from_str(str_val))
-        
+
     def __str__(self):
         values = []
         for key, value in self.items():
@@ -89,7 +92,7 @@ class Options(dict):
                 values.append(key)
             else:
                 values.append('%s=%s' % (key, value))
-        return ','.join(values)     
+        return ','.join(values)
 
 class Stream(object):
     """Handle any string pointing to a path or any other similar object and close
@@ -126,7 +129,7 @@ class TTYrecEntry(object):
 
     def __repr__(self):
         return '[%s] %s %s\n%s\n' % (self.duration, len(self.payload), self.options, self.payload)
-        
+
 class TTYrecStream(object):
     """This objects encapsulates all handling of ttyrec files and their ascii representation.
 It works also as a generator so you can iterate the results as may times as required.
@@ -136,31 +139,31 @@ and on demand.
 All methods return the object itself to easy concatenation. This is an example::
 
     from ttyrec.io import TTYrecStream
-    
+
     #load a file and add some intro (file is not being read at this time)
     basic = TTYrecStream.load_ttyrec('/tmp/a_file').add_intro(intro_delay=2)
-    
+
     #print the first five entries without ever accessing all the file
     import itertools
     print list(itertools.islice(basic, 0 , 5))
-    
+
     #continue processing
     basic.mark_input().delay_input(delay_after_input=2.5)
-    
+
     #write the file without every getting all the file to memory
     basic.write_ascii('/tmp/ascii_repr')
 
 There is no buffer strategy in place besides the default system stratgegy for handling the "open" call.
-defining this would be very simple. 
+defining this would be very simple.
 """
     def __init__(self):
         """Prepare the process pipe and the empty generator"""
         self._process_pipe = []
         self._gen = None
 
-    def __store(self):
+    def store(self):
         """Store the method being called for re-play."""
-        frame = currentframe(1)
+        frame = currentframe()
         arg_spec = getargvalues(frame)
         name = frame.f_code.co_name
         args = {}
@@ -169,20 +172,20 @@ defining this would be very simple.
                 args[var_name] = arg_spec.locals[var_name]
         self._process_pipe.append((name, args))
         return self
-    
-    def __reload(self):
+
+    def reload(self):
         """Reloads the configuration to setup the generator again."""
         proc_pipe = self._process_pipe
         self._process_pipe = []
         for method, args in proc_pipe:
-            getattr(self,method)(**args)
+            getattr(self, method)(**args)
 
     def __iter__(self):
         """Returns the setup iterator and prepare a new one"""
         it = self._gen
-        self.__reload()
+        self.reload()
         return it
-    
+
     def load_ttyrec(self, tty_file):
         """Reads a ttyrec binary file.
 
@@ -195,19 +198,19 @@ defining this would be very simple.
                     while True:
                         sec, usec, length = unpack(_HEADER, fin.read(_HEADER_SIZE))
                         payload = fin.read(length)
-                        
+
                         #ready
                         tstamp = sec + usec / 1000000.0
                         if last is None:
                             last = tstamp
-                        
+
                         yield TTYrecEntry(tstamp-last, payload)
                         last = tstamp
                 except:
                     pass
         self._gen = gen()
-        return self.__store()
-    
+        return self.store()
+
     def load_ascii(self, ascii_file):
         """Reads an ascii file representing a ttyrec binary.
 
@@ -223,7 +226,7 @@ defining this would be very simple.
                         entry_nr += 1
                         line_nr += 1
                         if not line: break
-                        
+
                         #get strings
                         timing, length, options = _ASCII_HEAD.match(line).groups()
                         #parse values
@@ -231,19 +234,19 @@ defining this would be very simple.
                         length = int(length)
                         if options:
                             options = Options.from_str(options)
-                        
+
                         payload = fin.read(length)
                         line_nr += payload.count('\n')
-                            
+
                         yield TTYrecEntry(timing, payload, options)
                         assert(fin.read(1)=='\n') #There should be a carriage return separating each entry
                         line_nr +=1
                 except:
-                    print "Error in entry %s (line~%s): %s" % (entry_nr, line_nr, line)
+                    print("Error in entry %s (line~%s): %s" % (entry_nr, line_nr, line))
                     raise
         self._gen = gen()
-        return self.__store()
-    
+        return self.store()
+
     def save_ascii(self, ascii_file):
         """Writes result to an ascii file.
 
@@ -253,14 +256,14 @@ defining this would be very simple.
             for entry in self._gen:
                 #allow some simple time manipulation
                 fout.write('[%s] %s %s\n%s\n' % (entry.duration, len(entry.payload), entry.options, entry.payload))
-            
+
         #we have consumed the iterator, set it up again
-        self.__reload()
+        self.reload()
         return self
-        
+
     def save_ttyrec(self, tty_file):
         """Writes result to a ttyrec binary file that can be replayed with ttyplay.
-        
+
 :param tty_file: ttyrecord binary output file."""
         runtime = 0.0
         with Stream(tty_file , 'wb') as fout:
@@ -270,14 +273,14 @@ defining this would be very simple.
                 sec = int(runtime)
                 usec = int((runtime-int(runtime)) * 1000000)
                 header = pack(_HEADER, sec, usec, length)
-                
+
                 fout.write(header)
                 fout.write(entry.payload)
-                
+
         #we have consumed the iterator, set it up again
-        self.__reload()
+        self.reload()
         return self
-        
+
     #EFFECTS
     def teletype(self):
         from random import Random
@@ -287,12 +290,12 @@ defining this would be very simple.
             if duration >= max_delay: return max_delay
             if jitter is None: jitter=0.02
             #value between 0 and max_delay that gets to duration if jitter gets to  0
-            if r.random() < 0.5: 
+            if r.random() < 0.5:
                 return duration * (1-(r.random() * jitter))
-            else: 
+            else:
                 return duration + (max_delay-duration)  * (r.random() * jitter)
-            
-            
+
+
         def gen(old_generator):
             for entry in old_generator:
                 if 'i' in entry.options and len(entry.payload) > 1:
@@ -301,7 +304,7 @@ defining this would be very simple.
                     else: char_duration = float(char_duration)
                     jitter = entry.options.get('j', None)
                     if jitter is not None: jitter = float(jitter)
-                    
+
                     #this is input we must extend it in a typewritter similar manner
                     for c in entry.payload:
                         duration = jitter_func(char_duration, jitter)
@@ -311,63 +314,63 @@ defining this would be very simple.
                     yield entry
 
         self._gen = gen(self._gen)
-        return self.__store()
+        return self.store()
 
     def cap_delays(self, max_delay=3):
         """Reduces all delay to the given maximum.
-    
+
 :param max_delay: maximal number of seconds to wait between any kind of feedback (i.e. input or output)."""
         def gen(old_generator):
             for entry in old_generator:
                 if entry.duration > max_delay:
                     entry.duration = max_delay
-                
-                yield entry  
+
+                yield entry
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def change_speed(self, speed=1.0):
         """changes the recorded speed to the given one.
-    
+
 :param speed: speed factor (<1 = slower, >1 = faster)."""
         def gen(old_generator):
             for entry in old_generator:
                     entry.duration *= speed
                     yield entry
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def add_intro(self, intro_delay=1):
         """Clears the screen before starting and remain like that for a while.
-    
+
 :param intro_delay: number of seconds (or fraction) to remain with the screen black."""
         def gen(old_generator):
             show_intro = True
             clear_screen = '\x1b[H\x1b[2J'
-            
+
             for entry in old_generator:
                 if show_intro:
                     show_intro = False
                     yield TTYrecEntry(intro_delay, clear_screen)
-                    
+
                 yield entry
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def split_lines(self, delay_per_line=0.01):
         """Break lines stored and show them with some delay, line by line.
-        
+
 :param delay_per_line: seconds (or fraction) to wait between lines"""
         def gen(old_generator):
             for entry in old_generator:
                 for line in entry.payload.splitlines(True):
                     yield TTYrecEntry(delay_per_line, line, entry.options)
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def delay_input(self, delay_before_input=0, delay_after_input=1):
         """Adds some delay before and/or after the input is done.
-        
+
 :param delay_before_input: seconds (or fraction) to wait before input starts.
 :param delay_after_input: seconds (or fraction) to wait after input finishes."""
         def gen(old_generator):
@@ -379,24 +382,24 @@ defining this would be very simple.
                         in_input = True
                 elif in_input:
                     #getting out of input
-                    entry.duration = delay_after_input 
+                    entry.duration = delay_after_input
                     in_input = False
                 yield entry
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def raw_effect(self, func=None):
         if func is not None:
             def gen(old_generator):
                 for entry in old_generator:
                     yield func(entry)
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def effect(self, generator):
         self._gen = generator(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def merge_lines(self, threshold=0.01, merge_input=False):
         """Merge lines with less than threshold seconds pause together."""
         def gen(old_generator):
@@ -414,10 +417,10 @@ defining this would be very simple.
             if last_entry is not None:
                 yield last_entry
         self._gen = gen(self._gen)
-        return self.__store()
-    
+        return self.store()
+
     def mark_input(self, prompt_suffix=' $ '):
-        """Mark lines following what is defined to be the end of the prompt as input 
+        """Mark lines following what is defined to be the end of the prompt as input
 (if not already marked as such)"""
         def gen(old_generator):
             next_is_input = False
@@ -429,9 +432,9 @@ defining this would be very simple.
                     next_is_input = True
                 yield entry
         self._gen = gen(self._gen)
-        return self.__store()
-        
-        
+        return self.store()
+
+
 from time import sleep
 import curses
 import sys
@@ -440,11 +443,11 @@ class Player(object):
         if stream is None:
             stream = TTYrecStream()
         self._stream = stream
-        
+
     def load(self, tty_file):
         self._stream.load_ttyrec(tty_file)
-    
-    def play(self, speed=1.0, interactive=True):
+
+    def play(self, speed=1.0, interactive=True, **kwargs):
         try:
             w = curses.initscr()
             w.nodelay(True)
@@ -468,7 +471,7 @@ class Player(object):
                                 w.nodelay(False)
                                 while True:
                                     key = w.getkey()
-                                    if key in 'p ': 
+                                    if key in 'p ':
                                         break
                                 w.nodelay(True)
                             elif key == ord('f'):
@@ -481,22 +484,93 @@ class Player(object):
                                 speed = 0.5
                             elif key >= ord('1') and key <= ord('9'):
                                 speed = float(key - ord('0'))
-                                
+
                     except:
                         pass
-                
+
                 if not running:
                     break
                 running_time += entry.duration
                 sleep(entry.duration / speed)
-                sys.stdout.write(entry.payload)
-                sys.stdout.flush() 
+                sys.stdout.buffer.write(entry.payload)
+                sys.stdout.flush()
             recording_time=timedelta(seconds=running_time)
             play_time=datetime.now() - start
         finally:
             curses.endwin()
 
-        print "Recording: %s" % recording_time
-        print "Play time: %s" % play_time
 
-        
+class FakeTypingPlayer(Player):
+    def __init__(self, stream = None):
+        if stream is None:
+            stream = TTYrecStream()
+        self._stream = stream
+
+    def load(self, tty_file):
+        self._stream.load_ttyrec(tty_file)
+
+    def play(self, speed=1.0, interactive=True, freq=1):
+        entries = [entry for entry in self._stream]
+        #print([len(e.payload) for e in entries])
+        #import pdb; pdb.set_trace()
+        try:
+            w = curses.initscr()
+            #w.nodelay(False)
+            w.nodelay(True)
+            curses.noecho()
+            #curses.echo()
+            #curses.cbreak()
+            #w.keypad(True)
+            w.clear()
+            running = True
+            bangkeys = set(string.ascii_letters + string.digits + ' ')
+            bangords = set(map(ord, bangkeys))
+            i = n = 0
+            last_i = -1
+            running = True
+            while True:
+                while True:
+                    try:
+                        key = w.getch()
+                    except:
+                        continue
+                    #print(key)
+                    if key == -1:
+                        continue
+                    #if ord(key) == 27:  # ESC key
+                    #if key == 27:  # ESC key
+                    if key == ord('`'):  # ESC key
+                        running = False
+                        break
+                    #elif key in bangkeys:
+                    elif key in bangords:
+                        n += 1
+                        #print("n", n, "i", i)
+                        if n%freq == 0 and last_i != i:
+                            last_i = i
+                            i += 1
+                            break
+                    #if last_i != i:
+                        #w.addstr(0, 0, entry.payload)
+                    #    sys.stdout.buffer.write(entries[i].payload)
+                        #sys.stdout.buffer.flush()
+                    #    sys.stdout.flush()
+                if not running:
+                    break
+                #sleep(0.05)
+                #curses.raw()
+                #sys.stdout.write('{0}'.format(i))
+                if last_i != i and i < len(entries):
+                    try:
+                        sys.stdout.buffer.write(entries[i].payload)#.replace('\x1b[6n', b''))
+                        sys.stdout.flush()
+                    except:
+                        pass
+                #curses.noraw()
+                #curses.doupdate()
+                #sleep(0.05)
+        finally:
+            #curses.nocbreak()
+            #w.keypad(False)
+            curses.echo()
+            #curses.endwin()
