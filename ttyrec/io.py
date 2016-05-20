@@ -511,66 +511,58 @@ class FakeTypingPlayer(Player):
 
     def play(self, speed=1.0, interactive=True, freq=1):
         entries = [entry for entry in self._stream]
-        #print([len(e.payload) for e in entries])
-        #import pdb; pdb.set_trace()
         try:
             w = curses.initscr()
-            #w.nodelay(False)
             w.nodelay(True)
             curses.noecho()
-            #curses.echo()
-            #curses.cbreak()
-            #w.keypad(True)
+            w.keypad(True)
             w.clear()
             running = True
-            bangkeys = set(string.ascii_letters + string.digits + ' ')
+            #bangkeys = set(string.ascii_letters + string.digits + ' ')
+            bangkeys = set(string.ascii_lowercase)
             bangords = set(map(ord, bangkeys))
             i = n = 0
             last_i = -1
             running = True
+            back = {ord(','): 1, ord('-'): 2, ord('_'): 5, ord('<'): 10}
+            fore = {ord('.'): 1, ord('='): 2, ord('+'): 5, ord('>'): 10}
             while True:
                 while True:
                     try:
                         key = w.getch()
                     except:
                         continue
-                    #print(key)
                     if key == -1:
                         continue
-                    #if ord(key) == 27:  # ESC key
-                    #if key == 27:  # ESC key
-                    if key == ord('`'):  # ESC key
-                        running = False
-                        break
-                    #elif key in bangkeys:
                     elif key in bangords:
                         n += 1
-                        #print("n", n, "i", i)
                         if n%freq == 0 and last_i != i:
-                            last_i = i
-                            i += 1
+                            last_i, i = i, i+1
                             break
-                    #if last_i != i:
-                        #w.addstr(0, 0, entry.payload)
-                    #    sys.stdout.buffer.write(entries[i].payload)
-                        #sys.stdout.buffer.flush()
-                    #    sys.stdout.flush()
+                    elif key in back:
+                        last_i, i = i, max(0, i - back[key])
+                        break
+                    elif key in fore:
+                        last_i, i = i, min(len(entries), i + fore[key])
+                        break
+                    if key == ord('`'):
+                        running = False
+                        break
                 if not running:
                     break
-                #sleep(0.05)
-                #curses.raw()
-                #sys.stdout.write('{0}'.format(i))
                 if last_i != i and i < len(entries):
-                    try:
-                        sys.stdout.buffer.write(entries[i].payload)#.replace('\x1b[6n', b''))
-                        sys.stdout.flush()
-                    except:
-                        pass
-                #curses.noraw()
-                #curses.doupdate()
-                #sleep(0.05)
+                    if i > last_i:
+                        l = last_i
+                    else:
+                        l = 0
+                        w.clear()
+                        w.refresh()
+                    buf = b''.join(e.payload for e in entries[l:i])
+                    sys.stdout.buffer.write(buf)
+                    sys.stdout.flush()
         finally:
-            #curses.nocbreak()
-            #w.keypad(False)
+            w.clear()
+            w.keypad(False)
             curses.echo()
-            #curses.endwin()
+            curses.endwin()
+        print('fin.')
