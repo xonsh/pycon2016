@@ -7,4 +7,5 @@ from ttyrec.io import FakeTypingPlayer, Player
 
 ftp = FakeTypingPlayer()
 ftp.load($ARG1)
-ftp.play(freq=1)
+jump = int($ARG2) if len($ARGS) >= 3 else 1
+ftp.play(freq=1, jump=jump)

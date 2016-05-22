@@ -509,7 +509,7 @@ class FakeTypingPlayer(Player):
     def load(self, tty_file):
         self._stream.load_ttyrec(tty_file)
 
-    def play(self, speed=1.0, interactive=True, freq=1):
+    def play(self, speed=1.0, interactive=True, freq=1, jump=1):
         entries = [entry for entry in self._stream]
         try:
             w = curses.initscr()
@@ -537,7 +537,7 @@ class FakeTypingPlayer(Player):
                     elif key in bangords:
                         n += 1
                         if n%freq == 0 and last_i != i:
-                            last_i, i = i, i+2
+                            last_i, i = i, i+jump
                             break
                     elif key in back:
                         last_i, i = i, max(0, i - back[key])
