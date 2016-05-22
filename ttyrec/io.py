@@ -524,8 +524,8 @@ class FakeTypingPlayer(Player):
             i = n = 0
             last_i = -1
             running = True
-            back = {ord(','): 1, ord('-'): 2, ord('_'): 5, ord('<'): 10}
-            fore = {ord('.'): 1, ord('='): 2, ord('+'): 5, ord('>'): 10}
+            back = {ord(','): 1, ord('_'): 5, ord('<'): 10, ord('-'): 20}
+            fore = {ord('.'): 1, ord('+'): 5, ord('>'): 10, ord('='): 20}
             while True:
                 while True:
                     try:
@@ -537,7 +537,7 @@ class FakeTypingPlayer(Player):
                     elif key in bangords:
                         n += 1
                         if n%freq == 0 and last_i != i:
-                            last_i, i = i, i+1
+                            last_i, i = i, i+2
                             break
                     elif key in back:
                         last_i, i = i, max(0, i - back[key])
@@ -565,4 +565,4 @@ class FakeTypingPlayer(Player):
             w.keypad(False)
             curses.echo()
             curses.endwin()
-        print('fin.')
+        print('the human, fin.')
